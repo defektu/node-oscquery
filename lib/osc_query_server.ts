@@ -258,6 +258,13 @@ export class OSCQueryServer {
 			hostname: `${serviceName}._oscjson._tcp`,
 		});
 
+		// Set up OSC message handler for WebSocket binary messages
+		if (this._wsServer) {
+			this._wsServer.setOSCMessageHandler((path: string, args: unknown[]) => {
+				this.receiveOSCMessage(path, args);
+			});
+		}
+
 		await Promise.all([
 			httpListenPromise,
 			wsListenPromise,
@@ -376,6 +383,43 @@ export class OSCQueryServer {
 	broadcastPathRenamed(oldPath: string, newPath: string) {
 		if (this._wsServer) {
 			this._wsServer.broadcastPathRenamed(oldPath, newPath);
+		}
+	}
+
+	/**
+	 * Handle incoming OSC message (e.g., from WebSocket binary)
+	 * Updates node values based on the OSC message path and arguments
+	 */
+	receiveOSCMessage(path: string, args: unknown[]) {
+		const node = this._getNodeForPath(path);
+
+		if (!node) {
+			console.log(`OSC message received for unknown path: ${path}`);
+			return;
+		}
+
+		// Check if node has arguments (is a method, not just a container)
+		const serialized = node.serialize();
+		const access = serialized.ACCESS;
+
+		// Check if node is writable
+		if (access === undefined || access === OSCQAccess.NO_VALUE || access === OSCQAccess.READONLY) {
+			console.log(`OSC message received for read-only path: ${path}`);
+			return;
+		}
+
+		// Update values for each argument
+		for (let i = 0; i < args.length; i++) {
+			try {
+				node.setValue(i, args[i]);
+			} catch (err) {
+				console.error(`Failed to set value for ${path} argument ${i}:`, err);
+			}
+		}
+
+		// Broadcast the change
+		if (this._wsServer) {
+			this._wsServer.broadcastPathChanged(path);
 		}
 	}
 }

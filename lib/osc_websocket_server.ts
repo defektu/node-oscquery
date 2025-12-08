@@ -206,13 +206,22 @@ export class OSCQueryWebSocketServer {
 		// Check if message is JSON (text) or binary (OSC)
 		if (data.length > 0 && (data[0] === 0x2F || data[0] === 0x23)) {
 			// Binary OSC message (starts with '/' or '#')
-			// TODO: Handle OSC binary messages
-			console.log("WebSocket binary OSC message received (not yet implemented)", {
-				length: data.length,
-				firstByte: data[0],
-			});
-			
-			// When OSC binary handling is implemented, call this._onOSCMessage here
+			try {
+				const decoded = this._decodeOSCMessage(data);
+				if (decoded) {
+					console.log("WebSocket binary OSC message received", {
+						path: decoded.path,
+						args: decoded.args,
+					});
+					
+					// Call the OSC message handler if set
+					if (this._onOSCMessage) {
+						this._onOSCMessage(decoded.path, decoded.args);
+					}
+				}
+			} catch (err) {
+				console.error("Failed to decode OSC binary message", err);
+			}
 		} else {
 			// Try to parse as JSON
 			try {
@@ -250,6 +259,162 @@ export class OSCQueryWebSocketServer {
 			}
 			// Handle other commands as needed
 		}
+	}
+
+	/**
+	 * Decode OSC binary message from buffer
+	 * OSC format: address (null-terminated, 4-byte aligned) + type tag (null-terminated, 4-byte aligned) + arguments
+	 */
+	private _decodeOSCMessage(buffer: Buffer): { path: string; args: unknown[] } | null {
+		if (buffer.length < 4) {
+			return null;
+		}
+
+		let offset = 0;
+
+		// Read address (null-terminated string, 4-byte aligned)
+		const addressEnd = buffer.indexOf(0, offset);
+		if (addressEnd === -1) {
+			return null;
+		}
+		const path = buffer.toString("utf8", offset, addressEnd);
+		offset = Math.ceil((addressEnd + 1) / 4) * 4; // Align to 4-byte boundary
+
+		if (offset >= buffer.length) {
+			return { path, args: [] };
+		}
+
+		// Read type tag string (starts with ',', null-terminated, 4-byte aligned)
+		const typeTagEnd = buffer.indexOf(0, offset);
+		if (typeTagEnd === -1 || buffer[offset] !== 0x2C) { // 0x2C is ','
+			return { path, args: [] };
+		}
+		const typeTag = buffer.toString("utf8", offset + 1, typeTagEnd);
+		offset = Math.ceil((typeTagEnd + 1) / 4) * 4; // Align to 4-byte boundary
+
+		// Parse arguments based on type tag
+		const args: unknown[] = [];
+
+		for (let i = 0; i < typeTag.length && offset < buffer.length; i++) {
+			const type = typeTag[i];
+			let value: unknown;
+
+			switch (type) {
+				case "i": // int32
+					if (offset + 4 > buffer.length) break;
+					value = buffer.readInt32BE(offset);
+					offset += 4;
+					break;
+
+				case "f": // float32
+					if (offset + 4 > buffer.length) break;
+					value = buffer.readFloatBE(offset);
+					offset += 4;
+					break;
+
+				case "s": // string
+				case "S": // alternate string
+					const strEnd = buffer.indexOf(0, offset);
+					if (strEnd === -1) break;
+					value = buffer.toString("utf8", offset, strEnd);
+					offset = Math.ceil((strEnd + 1) / 4) * 4;
+					break;
+
+				case "b": // blob
+					if (offset + 4 > buffer.length) break;
+					const blobSize = buffer.readUInt32BE(offset);
+					offset += 4;
+					if (offset + blobSize > buffer.length) break;
+					value = buffer.subarray(offset, offset + blobSize);
+					offset = Math.ceil((offset + blobSize) / 4) * 4;
+					break;
+
+				case "h": // int64
+					if (offset + 8 > buffer.length) break;
+					// Read as BigInt for 64-bit integers
+					const high = buffer.readInt32BE(offset);
+					const low = buffer.readUInt32BE(offset + 4);
+					// Convert to number (may lose precision for very large values)
+					value = high * 0x100000000 + low;
+					offset += 8;
+					break;
+
+				case "t": // timetag
+					if (offset + 8 > buffer.length) break;
+					// OSC timetag is 64-bit NTP timestamp
+					const seconds = buffer.readUInt32BE(offset);
+					const fraction = buffer.readUInt32BE(offset + 4);
+					value = { seconds, fraction };
+					offset += 8;
+					break;
+
+				case "d": // float64 (double)
+					if (offset + 8 > buffer.length) break;
+					value = buffer.readDoubleBE(offset);
+					offset += 8;
+					break;
+
+				case "c": // char
+					if (offset + 4 > buffer.length) break;
+					value = String.fromCharCode(buffer.readUInt32BE(offset));
+					offset += 4;
+					break;
+
+				case "r": // RGBA color
+					if (offset + 4 > buffer.length) break;
+					const r = buffer[offset];
+					const g = buffer[offset + 1];
+					const b = buffer[offset + 2];
+					const a = buffer[offset + 3];
+					value = { r, g, b, a };
+					offset += 4;
+					break;
+
+				case "m": // MIDI message
+					if (offset + 4 > buffer.length) break;
+					const port = buffer[offset];
+					const status = buffer[offset + 1];
+					const data1 = buffer[offset + 2];
+					const data2 = buffer[offset + 3];
+					value = { port, status, data1, data2 };
+					offset += 4;
+					break;
+
+				case "T": // TRUE
+					value = true;
+					break;
+
+				case "F": // FALSE
+					value = false;
+					break;
+
+				case "N": // NIL
+					value = null;
+					break;
+
+				case "I": // INFINITUM
+					value = Infinity;
+					break;
+
+				case "[": // Array start
+					// Arrays are handled by reading nested type tags
+					// For simplicity, we'll skip arrays for now
+					break;
+
+				case "]": // Array end
+					break;
+
+				default:
+					// Unknown type, skip
+					break;
+			}
+
+			if (value !== undefined) {
+				args.push(value);
+			}
+		}
+
+		return { path, args };
 	}
 }
 
