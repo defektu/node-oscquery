@@ -489,6 +489,30 @@ export class OSCQueryServer {
 		}
 	}
 
+	/**
+	 * Send OSC message to clients via WebSocket
+	 * This sends the actual OSC binary message to all clients.
+	 */
+	sendValue(path: string, ...args: unknown[]) {
+		const node = this._getNodeForPath(path);
+		
+		// Update internal node values if path exists
+		if (node && args.length > 0) {
+			for (let i = 0; i < args.length; i++) {
+				try {
+					node.setValue(i, args[i]);
+				} catch (err) {
+					// Ignore errors when setting values
+				}
+			}
+		}
+
+		// Send OSC message to WebSocket clients
+		if (this._wsServer) {
+			this._wsServer.broadcastOSCMessage(path, args);
+		}
+	}
+
 	unsetValue(path: string, arg_index: number) {
 		const node = this._getNodeForPath(path);
 

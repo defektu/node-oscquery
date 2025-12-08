@@ -133,6 +133,44 @@ export class OSCQueryWebSocketServer {
 	}
 
 	/**
+	 * Broadcast OSC message (binary) to subscribed clients
+	 */
+	broadcastOSCMessage(path: string, args: unknown[]) {
+		if (this._wsClients.size === 0) {
+			return;
+		}
+
+		const oscBuffer = this._encodeOSCMessage(path, args);
+		if (!oscBuffer) {
+			return;
+		}
+
+		// Send to all clients subscribed to this path or any parent path
+		for (const client of this._wsClients) {
+			if (client.ws.readyState === WebSocket.OPEN) {
+				// Check if client is subscribed to this path or any parent
+				let shouldNotify = false;
+				for (const subscribedPath of client.subscribedPaths) {
+					if (path === subscribedPath || path.startsWith(subscribedPath + "/")) {
+						shouldNotify = true;
+						break;
+					}
+				}
+
+				// If no specific subscription, notify all clients (default behavior)
+				if (client.subscribedPaths.size === 0 || shouldNotify) {
+					try {
+						client.ws.send(oscBuffer);
+					} catch (err) {
+						// Connection may have closed, remove it
+						this._wsClients.delete(client);
+					}
+				}
+			}
+		}
+	}
+
+	/**
 	 * Broadcast PATH_RENAMED message to all clients
 	 */
 	broadcastPathRenamed(oldPath: string, newPath: string) {
@@ -415,6 +453,69 @@ export class OSCQueryWebSocketServer {
 		}
 
 		return { path, args };
+	}
+
+	/**
+	 * Encode OSC message to binary buffer
+	 * OSC format: address (null-terminated, 4-byte aligned) + type tag (null-terminated, 4-byte aligned) + arguments
+	 */
+	private _encodeOSCMessage(path: string, args: unknown[]): Buffer | null {
+		// Encode address (path)
+		const pathBuffer = Buffer.from(path + "\0", "utf8");
+		const pathPadding = (4 - (pathBuffer.length % 4)) % 4;
+		const paddedPathBuffer: Buffer = Buffer.concat([pathBuffer as Uint8Array, Buffer.alloc(pathPadding) as Uint8Array]) as Buffer;
+
+		// Build type tag
+		let typeTag = ",";
+		const argBuffers: Buffer[] = [];
+
+		for (const arg of args) {
+			if (typeof arg === "number") {
+				if (Number.isInteger(arg)) {
+					// int32
+					typeTag += "i";
+					const buffer = Buffer.allocUnsafe(4);
+					buffer.writeInt32BE(arg, 0);
+					argBuffers.push(buffer);
+				} else {
+					// float32
+					typeTag += "f";
+					const buffer = Buffer.allocUnsafe(4);
+					buffer.writeFloatBE(arg, 0);
+					argBuffers.push(buffer);
+				}
+			} else if (typeof arg === "string") {
+				typeTag += "s";
+				const strBuffer = Buffer.from(arg + "\0", "utf8");
+				const strPadding = (4 - (strBuffer.length % 4)) % 4;
+				argBuffers.push(Buffer.concat([strBuffer as Uint8Array, Buffer.alloc(strPadding) as Uint8Array]) as Buffer);
+			} else if (typeof arg === "boolean") {
+				typeTag += arg ? "T" : "F";
+			} else if (arg === null || arg === undefined) {
+				typeTag += "N";
+			} else if (Buffer.isBuffer(arg)) {
+				// blob
+				typeTag += "b";
+				const sizeBuffer = Buffer.allocUnsafe(4);
+				sizeBuffer.writeUInt32BE(arg.length, 0);
+				const blobPadding = (4 - (arg.length % 4)) % 4;
+				argBuffers.push(sizeBuffer);
+				argBuffers.push(arg);
+				argBuffers.push(Buffer.alloc(blobPadding));
+			} else {
+				console.error("Unsupported type", typeof arg);
+				// Unsupported type, skip
+				continue;
+			}
+		}
+
+		// Encode type tag
+		const typeTagBuffer = Buffer.from(typeTag + "\0", "utf8");
+		const typeTagPadding = (4 - (typeTagBuffer.length % 4)) % 4;
+		const paddedTypeTagBuffer: Buffer = Buffer.concat([typeTagBuffer as Uint8Array, Buffer.alloc(typeTagPadding) as Uint8Array]) as Buffer;
+
+		// Combine all buffers
+		return Buffer.concat([paddedPathBuffer as Uint8Array, paddedTypeTagBuffer as Uint8Array, ...argBuffers.map(b => b as Uint8Array)]) as Buffer;
 	}
 }
 
