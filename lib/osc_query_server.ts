@@ -6,6 +6,7 @@ import { OSCNode } from "./osc_node";
 import { SerializedHostInfo, SerializedNode } from "./serialized_node";
 import { HostInfo, OSCQAccess } from "./osc_types";
 import { OSCMethodDescription } from "./osc_method_description";
+import { OSCQueryWebSocketServer } from "./osc_websocket_server";
 
 export interface OSCQueryServiceOptions {
 	httpPort?: number;
@@ -16,8 +17,8 @@ export interface OSCQueryServiceOptions {
 	oscPort?: number,
 	oscTransport?: "TCP" | "UDP",
 	serviceName?: string,
-	// wsIp?: string,
-	// wsPort?: string,
+	wsIp?: string,
+	wsPort?: number,
 }
 
 const EXTENSIONS = {
@@ -32,6 +33,8 @@ const EXTENSIONS = {
 	CLIPMODE: true,
 	// OVERLOADS
 	// HTML
+	LISTEN: true, // Indicates WebSocket/bidirectional communication support
+	PATH_CHANGED: true, // Indicates server will send PATH_CHANGED messages
 }
 
 const VALID_ATTRIBUTES = [
@@ -58,6 +61,7 @@ export class OSCQueryServer {
 	private _mdns: Responder;
 	private _mdnsService: CiaoService | null = null;
 	private _server: http.Server;
+	private _wsServer: OSCQueryWebSocketServer | null = null;
 	private _opts: OSCQueryServiceOptions;
 	private _root: OSCNode = new OSCNode("");
 
@@ -75,9 +79,28 @@ export class OSCQueryServer {
 	}
 
 	_httpHandler(req: http.IncomingMessage, res: http.ServerResponse) {
+		// Set CORS headers
+		const origin = req.headers.origin;
+		if (origin) {
+			res.setHeader("Access-Control-Allow-Origin", origin);
+		} else {
+			res.setHeader("Access-Control-Allow-Origin", "*");
+		}
+		res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+		res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+		res.setHeader("Access-Control-Max-Age", "86400"); // 24 hours
+
+		// Handle preflight OPTIONS request
+		if (req.method === "OPTIONS") {
+			res.statusCode = 204;
+			res.end();
+			return;
+		}
+
 		if (req.method != "GET") {
 			res.statusCode = 400;
 			res.end();
+			return;
 		}
 
 		const url = new URL(req.url!, `http://${req.headers.host}`);
@@ -94,14 +117,31 @@ export class OSCQueryServer {
 		}
 
 		if (query == "HOST_INFO") {
+			// Build extensions dynamically - include WebSocket extensions only if server is running
+			const extensions: Record<string, boolean> = {
+				ACCESS: EXTENSIONS.ACCESS,
+				VALUE: EXTENSIONS.VALUE,
+				RANGE: EXTENSIONS.RANGE,
+				DESCRIPTION: EXTENSIONS.DESCRIPTION,
+				TAGS: EXTENSIONS.TAGS,
+				CRITICAL: EXTENSIONS.CRITICAL,
+				CLIPMODE: EXTENSIONS.CLIPMODE,
+			};
+			
+			// Only include WebSocket extensions if server is running
+			if (this._wsServer && this._wsServer.isRunning()) {
+				extensions.LISTEN = EXTENSIONS.LISTEN;
+				extensions.PATH_CHANGED = EXTENSIONS.PATH_CHANGED;
+			}
+
 			const hostInfo: SerializedHostInfo = {
 				NAME: this._opts.oscQueryHostName,
-				EXTENSIONS,
+				EXTENSIONS: extensions,
 				OSC_IP: this._opts.oscIp || this._opts.bindAddress || "0.0.0.0", // the proposal says that an undefined OSC_IP means that the http host should be used, but I think it's okay to be nice about it
 				OSC_PORT: this._opts.oscPort || this._opts.httpPort, // the proposal says that an undefined OSC_PORT means that the http port should be used, but I think it's okay to be nice about it
 				OSC_TRANSPORT: this._opts.oscTransport || "UDP", // per the proposal the default for an undefined values is "UDP", but there is nothing wrong with setting it either way
-				// WS_IP: this._opts.wsIp,
-				// WS_PORT: this._opts.wsPort,
+				WS_IP: this._opts.wsIp || this._opts.bindAddress || "0.0.0.0",
+				WS_PORT: this._opts.wsPort || this._opts.httpPort,
 			};
 
 			return respondJson(hostInfo, res);
@@ -158,9 +198,55 @@ export class OSCQueryServer {
 			this._opts.httpPort = await portfinder.getPortPromise();
 		}
 
+		// Start WebSocket server
+		// According to OSCQuery proposal: if WS_PORT is not specified,
+		// it defaults to the same port as the HTTP server
+		if (!this._opts.wsPort) {
+			this._opts.wsPort = this._opts.httpPort;
+		}
+
+		const wsIp = this._opts.wsIp || this._opts.bindAddress || "0.0.0.0";
+		const httpIp = this._opts.bindAddress || "0.0.0.0";
+		const isAttached = this._opts.wsPort === this._opts.httpPort && wsIp === httpIp;
+
+		// Create WebSocket server
+		if (isAttached) {
+			console.log("WebSocket server attached to HTTP server", {
+				port: this._opts.wsPort,
+				host: wsIp,
+			});
+			this._wsServer = new OSCQueryWebSocketServer({
+				server: this._server,
+			});
+		} else {
+			console.log("WebSocket server created on separate port", {
+				port: this._opts.wsPort,
+				host: wsIp,
+			});
+			this._wsServer = new OSCQueryWebSocketServer({
+				port: this._opts.wsPort,
+				host: wsIp,
+			});
+		}
+
+		// Set up HTTP server
 		const httpListenPromise: Promise<void> = new Promise(resolve => {
 			this._server.listen(this._opts.httpPort, this._opts.bindAddress || "0.0.0.0", resolve);
 		});
+
+		// Set up WebSocket server promise
+		const wsListenPromise: Promise<void> = (async () => {
+			if (isAttached) {
+				// WebSocket server is attached to HTTP server, so start it after HTTP server is ready
+				await httpListenPromise;
+				await this._wsServer!.start();
+				console.log("WebSocket server ready (attached to HTTP server)");
+			} else {
+				// Separate WebSocket server - start it independently
+				await this._wsServer!.start();
+				console.log("WebSocket server listening on port", this._opts.wsPort);
+			}
+		})();
 
 		const serviceName = this._opts.serviceName ?? "OSCQuery";
 
@@ -174,8 +260,12 @@ export class OSCQueryServer {
 
 		await Promise.all([
 			httpListenPromise,
+			wsListenPromise,
 			this._mdnsService.advertise(),
 		]);
+
+		// wsPort is guaranteed to be defined here since we set it above if it wasn't already set
+		const wsPort = this._opts.wsPort!;
 
 		return {
 			name: this._opts.oscQueryHostName,
@@ -183,6 +273,8 @@ export class OSCQueryServer {
 			oscIp: this._opts.oscIp || this._opts.bindAddress || "0.0.0.0",
 			oscPort: this._opts.oscPort || this._opts.httpPort,
 			oscTransport: this._opts.oscTransport || "UDP",
+			wsIp: this._opts.wsIp || this._opts.bindAddress || "0.0.0.0",
+			wsPort: wsPort,
 		};
 	}
 
@@ -191,8 +283,16 @@ export class OSCQueryServer {
 			this._server.close(err => err ? reject(err) : resolve());
 		});
 
+		const wsEndPromise: Promise<void> = (async () => {
+			if (this._wsServer) {
+				await this._wsServer.stop();
+				this._wsServer = null;
+			}
+		})();
+
 		await Promise.all([
 			httpEndPromise,
+			wsEndPromise,
 			this._mdnsService ? this._mdnsService.end() : Promise.resolve(),
 		]);
 	}
@@ -207,6 +307,9 @@ export class OSCQueryServer {
 		}
 
 		node.setOpts(params);
+		if (this._wsServer) {
+			this._wsServer.broadcastPathChanged(path);
+		}
 	}
 
 	removeMethod(path: string) {
@@ -219,9 +322,30 @@ export class OSCQueryServer {
 		// go back through the nodes in reverse and delete nodes until we have either reached the root or
 		// hit a non-empty one
 		while (node.parent != null && node.isEmpty()) {
+			const parentPath = this._getPathForNode(node.parent);
 			node.parent.removeChild(node.name);
 			node = node.parent;
+			// Broadcast changes for parent paths that were modified
+			if (parentPath && this._wsServer) {
+				this._wsServer.broadcastPathChanged(parentPath);
+			}
 		}
+
+		if (this._wsServer) {
+			this._wsServer.broadcastPathChanged(path);
+		}
+	}
+
+	_getPathForNode(node: OSCNode): string {
+		const pathComponents: string[] = [];
+		let current: OSCNode | null = node;
+
+		while (current && current.parent) {
+			pathComponents.unshift(current.name);
+			current = current.parent;
+		}
+
+		return "/" + pathComponents.join("/");
 	}
 
 	setValue(path: string, arg_index: number, value: unknown) {
@@ -229,6 +353,9 @@ export class OSCQueryServer {
 
 		if (node) {
 			node.setValue(arg_index, value);
+			if (this._wsServer) {
+				this._wsServer.broadcastPathChanged(path);
+			}
 		}
 	}
 
@@ -237,6 +364,18 @@ export class OSCQueryServer {
 
 		if (node) {
 			node.unsetValue(arg_index);
+			if (this._wsServer) {
+				this._wsServer.broadcastPathChanged(path);
+			}
+		}
+	}
+
+	/**
+	 * Broadcast PATH_RENAMED message to all WebSocket clients
+	 */
+	broadcastPathRenamed(oldPath: string, newPath: string) {
+		if (this._wsServer) {
+			this._wsServer.broadcastPathRenamed(oldPath, newPath);
 		}
 	}
 }

@@ -5,7 +5,9 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "prepack": "tsc"
+    "prepack": "tsc",
+    "dev": "npx ts-node-dev --respawn --transpile-only example/simple_example_server.ts",
+    "osc-example": "npx ts-node-dev --respawn --transpile-only example/osc_example_server.ts"
   },
   "repository": {
     "type": "git",
@@ -25,6 +27,7 @@
   "types": "dist/index.d.ts",
   "devDependencies": {
     "@types/node-osc": "^6.0.0",
+    "@types/ws": "^8.5.10",
     "node-osc": "^8.0.6",
     "ts-node": "^10.9.1",
     "typescript": "^4.8.4"
@@ -33,6 +36,7 @@
     "@homebridge/ciao": "^1.1.5",
     "axios": "^1.1.3",
     "bonjour-service": "^1.0.14",
-    "portfinder": "^1.0.32"
+    "portfinder": "^1.0.32",
+    "ws": "^8.16.0"
   }
 }
