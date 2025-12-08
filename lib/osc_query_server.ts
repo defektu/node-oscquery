@@ -1,6 +1,7 @@
 import http from "node:http";
 import { getResponder, type Responder, type CiaoService, Protocol } from "@homebridge/ciao";
 import portfinder from "portfinder";
+import { Server as OSCServer } from "node-osc";
 
 import { OSCNode } from "./osc_node"; 
 import { SerializedHostInfo, SerializedNode } from "./serialized_node";
@@ -115,9 +116,10 @@ function sanitizeName(name: string): string {
 	const maxServiceNameLength = 255 - 13; // Reserve space for suffix
 	
 	if (result.length > maxServiceNameLength) {
-		// Truncate to fit, ensuring we don't end with hyphen
+		// Truncate to fit, ensuring we don't end with hyphen or dot
 		result = result.substring(0, maxServiceNameLength);
-		result = result.replace(/-+$/, "");
+		// Remove trailing hyphens and dots (both are invalid at the end)
+		result = result.replace(/[-.]+$/, "");
 		
 		// If truncation left nothing, use default
 		if (result.length === 0) {
@@ -133,6 +135,7 @@ export class OSCQueryServer {
 	private _mdnsService: CiaoService | null = null;
 	private _server: http.Server;
 	private _wsServer: OSCQueryWebSocketServer | null = null;
+	private _oscServer: OSCServer | null = null;
 	private _opts: OSCQueryServiceOptions;
 	private _root: OSCNode = new OSCNode("");
 
@@ -337,11 +340,47 @@ export class OSCQueryServer {
 			});
 		}
 
-		await Promise.all([
-			httpListenPromise,
-			wsListenPromise,
-			this._mdnsService.advertise(),
-		]);
+		// Set up OSC server for UDP/TCP OSC messages
+		const oscPort = this._opts.oscPort || this._opts.httpPort!;
+		const oscIp = this._opts.oscIp || this._opts.bindAddress || "0.0.0.0";
+		const oscTransport = this._opts.oscTransport || "UDP";
+
+		// Currently node-osc only supports UDP, but we set it up anyway
+		if (oscTransport === "UDP") {
+			const oscListenPromise: Promise<void> = new Promise((resolve) => {
+				this._oscServer = new OSCServer(oscPort, oscIp, () => {
+					console.log(`OSC server is listening on port ${oscPort}`);
+					resolve();
+				});
+			});
+
+			// TypeScript knows _oscServer is assigned above in the same block
+			const oscServer = this._oscServer!;
+			oscServer.on("message", (msg) => {
+				const address = msg[0];
+				const data = msg.slice(1);
+				this.receiveOSCMessage(address, data);
+			});
+
+			oscServer.on("error", (err) => {
+				console.error("OSC server error:", err);
+			});
+
+			await Promise.all([
+				httpListenPromise,
+				wsListenPromise,
+				oscListenPromise,
+				this._mdnsService.advertise(),
+			]);
+		} else {
+			// TCP not yet supported by node-osc, log a warning
+			console.warn(`OSC transport "${oscTransport}" is not yet supported, only UDP is available`);
+			await Promise.all([
+				httpListenPromise,
+				wsListenPromise,
+				this._mdnsService.advertise(),
+			]);
+		}
 
 		// wsPort is guaranteed to be defined here since we set it above if it wasn't already set
 		const wsPort = this._opts.wsPort!;
@@ -369,9 +408,21 @@ export class OSCQueryServer {
 			}
 		})();
 
+		const oscEndPromise: Promise<void> = new Promise((resolve) => {
+			if (this._oscServer) {
+				this._oscServer.close(() => {
+					this._oscServer = null;
+					resolve();
+				});
+			} else {
+				resolve();
+			}
+		});
+
 		await Promise.all([
 			httpEndPromise,
 			wsEndPromise,
+			oscEndPromise,
 			this._mdnsService ? this._mdnsService.end() : Promise.resolve(),
 		]);
 	}
