@@ -57,6 +57,77 @@ function respondJson(json: Object, res: http.ServerResponse) {
 	res.end();
 }
 
+/**
+ * Sanitize service name for mDNS according to RFC 6763:
+ * - Normalize Unicode to ASCII
+ * - Keep only alphanumeric chars and hyphens
+ * - Cannot start or end with hyphen
+ * - No spaces, underscores, or other punctuation
+ * - Each label ≤ 63 bytes
+ * - Full name ≤ 255 bytes (accounting for ._oscjson._tcp suffix = 13 bytes)
+ */
+function sanitizeName(name: string): string { 
+	// Normalize Unicode characters (NFD = Normalization Form Decomposed)
+	// This separates base characters from diacritics (é -> e + ´)
+	let normalized = name.normalize("NFD");
+	
+	// Remove diacritics (accents, umlauts, etc.) and keep only ASCII alphanumeric and hyphens
+	normalized = normalized.replace(/[\u0300-\u036f]/g, ""); // Remove combining diacritical marks
+	normalized = normalized.replace(/[^a-zA-Z0-9-]/g, ""); // Keep only alphanumeric and hyphens
+	
+	// Split by dots (mDNS labels) and process each label
+	const labels = normalized.split(".").filter(label => label.length > 0);
+	const processedLabels: string[] = [];
+	
+	for (let label of labels) {
+		// Collapse multiple consecutive hyphens to single hyphen
+		label = label.replace(/-+/g, "-");
+		
+		// Remove leading and trailing hyphens
+		label = label.replace(/^-+|-+$/g, "");
+		
+		// Skip empty labels
+		if (label.length === 0) continue;
+		
+		// Truncate label to 63 bytes (UTF-8 encoding)
+		// Since we only have ASCII chars, byte length = character length
+		if (label.length > 63) {
+			label = label.substring(0, 63);
+			// Remove trailing hyphen if truncation created one
+			label = label.replace(/-+$/, "");
+		}
+		
+		if (label.length > 0) {
+			processedLabels.push(label);
+		}
+	}
+	
+	// Join labels back with dots
+	let result = processedLabels.join(".");
+	
+	// If no valid labels remain, use default
+	if (result.length === 0) {
+		result = "OSCQuery-" + Math.random().toString(36).substring(2, 15);
+	}
+	
+	// Account for ._oscjson._tcp suffix (13 bytes) when checking total length
+	// Full hostname format: ${result}._oscjson._tcp
+	const maxServiceNameLength = 255 - 13; // Reserve space for suffix
+	
+	if (result.length > maxServiceNameLength) {
+		// Truncate to fit, ensuring we don't end with hyphen
+		result = result.substring(0, maxServiceNameLength);
+		result = result.replace(/-+$/, "");
+		
+		// If truncation left nothing, use default
+		if (result.length === 0) {
+			result = "OSCQuery";
+		}
+	}
+	
+	return result;
+}
+
 export class OSCQueryServer {
 	private _mdns: Responder;
 	private _mdnsService: CiaoService | null = null;
@@ -249,13 +320,14 @@ export class OSCQueryServer {
 		})();
 
 		const serviceName = this._opts.serviceName ?? "OSCQuery";
+		const sanitizedServiceName = sanitizeName(serviceName);
 
 		this._mdnsService = this._mdns.createService({
-			name: serviceName,
+			name: sanitizedServiceName,
 			type: "oscjson",
 			port: this._opts.httpPort,
 			protocol: Protocol.TCP,
-			hostname: `${serviceName}._oscjson._tcp`,
+			hostname: `${sanitizedServiceName}._oscjson._tcp`,
 		});
 
 		// Set up OSC message handler for WebSocket binary messages
