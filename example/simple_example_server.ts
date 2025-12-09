@@ -2,11 +2,17 @@ import {
 	OSCQueryServer,
 	OSCTypeSimple,
 	OSCQAccess,
+	HostInfo,
+	OSCQueryServiceOptions,
 } from "../index";
 
 // this example is almost an exact copy of the example on https://github.com/Vidvox/OSCQueryProposal#oscquery-examples
 
-const service = new OSCQueryServer();
+const serviceOptions: OSCQueryServiceOptions = {
+	serviceName: "Node*OscQuery şğüıçö",
+};
+
+const service = new OSCQueryServer(serviceOptions);
 
 service.addMethod("/foo", {
 	description: "demonstrates a read-only OSC node- single float value ranged 0-100",
@@ -68,5 +74,29 @@ service.setValue("/baz/qux", 0, "half-full");
 // });
 // service.setValue("/test", 0, "asd");
 // service.setValue("/test", 1, [ 1, false ]);
+
+setInterval(() => {
+	service.sendValue("/foo", Math.random() * 100);
+}, 1000);
+
+service.addMethod("/lfo", {
+	description: "demonstrates a read-write OSC node-single float value ranged 0-100",
+	access: OSCQAccess.READWRITE,
+	arguments: [
+		{ 
+			type: OSCTypeSimple.FLOAT,
+			range: { min: 0, max: 100},
+		}
+	]
+});
+service.setValue("/lfo", 0, 0.5);
+
+let lfoPhase = 0;
+const lfoFrequency = 0.5; // Hz - adjust this to change the speed of the sine wave
+setInterval(() => {
+	lfoPhase += (lfoFrequency * 2 * Math.PI) / 60; // 60fps
+	const sineValue = (Math.sin(lfoPhase) + 1) / 2; // Convert from -1..1 to 0..1
+	service.sendValue("/lfo", sineValue * 100); // Scale to 0-100 range
+}, 8);
 
 service.start();

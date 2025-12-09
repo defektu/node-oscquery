@@ -502,7 +502,7 @@ export class OSCQueryServer {
 				try {
 					node.setValue(i, args[i]);
 				} catch (err) {
-					// Ignore errors when setting values
+					console.error(`Failed to set value for ${path} argument ${i}:`, err);
 				}
 			}
 		}

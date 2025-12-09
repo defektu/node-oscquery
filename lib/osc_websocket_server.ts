@@ -205,11 +205,7 @@ export class OSCQueryWebSocketServer {
 	}
 
 	private _handleWebSocketConnection(ws: WebSocket) {
-		console.log("WebSocket client connected", {
-			readyState: ws.readyState,
-			protocol: ws.protocol,
-			url: ws.url,
-		});
+		console.log("WebSocket client connected");
 
 		const client: WebSocketClient = {
 			ws,

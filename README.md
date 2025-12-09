@@ -68,7 +68,7 @@ Every extension that is implemented should have full compliance with the spec ho
 | CLIPMODE | ✅ |
 | OVERLOADS | ❌ |
 | HTML | ❌ |
-| Bi-Directional Communication | ❌ |
+| Bi-Directional Communication | ✅ |
 
 # Classes & Methods
 
@@ -83,6 +83,8 @@ Creates a new instance of the server. The options object has the following field
 - `oscIp`: OSC_IP field of the HOST_INFO attribute. If not specified, the `bindAddress` is used instead.
 - `oscPort`: OSC_PORT field of the HOST_INFO attribute. If not specified, the `httpPort` is used instead.
 - `oscTransport`: OSC_TRANSPORT of the HOST_INFO attribute. (Default: "UDP")
+- `wsIp`: WS_IP field of the HOST_INFO attribute. If not specified, the `bindAddress` is used instead.
+- `wsPort`: WS_PORT field of the HOST_INFO attribute. If not specified, a random free port will be chosen.
 - `serviceName`: Name of the mDNS service. (Default: "OSCQuery")
 
 **start**(): `Promise<HostInfo>`  
@@ -109,6 +111,13 @@ Sets the VALUE attribute for the method of the given path and the argument with 
 Removes the VALUE attribute for the method of the given path and the argument with the given index.
 This is different from setting it to `null`, since some methods actually take a null type as their argument.
 Unsetting it will completely remove the VALUE attribute in case all arguments are unset.
+
+
+**sendValue**(path: `string`, ...args: `unknown[]`)  
+Sets the VALUE attribute(s) of the method at the given path (like `setValue`), but also broadcasts the new value(s) as an OSC binary message to all connected WebSocket clients.  
+This is useful for synchronizing local state changes with networked OSCQuery/OSC clients.
+
+
 
 ## `OSCQueryDiscovery`
 
