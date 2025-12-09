@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "prepare": "npm run build",
     "prepack": "tsc",
     "dev": "npx ts-node-dev --respawn --transpile-only example/simple_example_server.ts",
     "osc-example": "npx ts-node-dev --respawn --transpile-only example/osc_example_server.ts"
