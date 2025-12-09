@@ -1,0 +1,259 @@
+{
+        "Data": {
+            "index": 1,
+            "varname": "Data",
+            "maxclass": "live.numbox",
+            "path": "/Data",
+            "type": "float",
+            "value": 109,
+            "range": {
+                "MIN": 0,
+                "MAX": 127
+            },
+            "description": "live.numbox",
+            "presentation_rect": [
+                199.99999070167542,
+                172.88134789466858,
+                44,
+                15
+            ],
+            "min": 0,
+            "max": 127
+        },
+        "Element": {
+            "index": 3,
+            "varname": "Element",
+            "maxclass": "live.menu",
+            "path": "/Element",
+            "type": "enum",
+            "value": 0,
+            "range": null,
+            "description": "live.menu",
+            "presentation_rect": [
+                199.99999070167542,
+                194.91524517536163,
+                100,
+                15
+            ]
+        },
+        "live.button": {
+            "index": 6,
+            "varname": "live.button",
+            "maxclass": "live.button",
+            "path": "/live.button",
+            "type": "bang",
+            "value": 0,
+            "range": null,
+            "description": "live.button",
+            "presentation_rect": [
+                199.99999070167542,
+                216.9491424560547,
+                15,
+                15
+            ]
+        },
+        "live.dial": {
+            "index": 8,
+            "varname": "live.dial",
+            "maxclass": "live.dial",
+            "path": "/live.dial",
+            "type": "float",
+            "value": 51.000000000000036,
+            "range": {
+                "MIN": 0,
+                "MAX": 127
+            },
+            "description": "live.dial",
+            "presentation_rect": [
+                250.84744596481323,
+                138.98304438591003,
+                41,
+                48
+            ],
+            "min": 0,
+            "max": 127
+        },
+        "live.text": {
+            "index": 9,
+            "varname": "live.text",
+            "maxclass": "live.text",
+            "path": "/live.text",
+            "type": "bool",
+            "value": 0,
+            "range": {
+                "MIN": 0,
+                "MAX": 1
+            },
+            "description": "live.text",
+            "presentation_rect": [
+                199.99999070167542,
+                240.67795491218567,
+                44,
+                15
+            ]
+        },
+        "live.slider": {
+            "index": 11,
+            "varname": "live.slider",
+            "maxclass": "live.slider",
+            "path": "/live.slider",
+            "type": "float",
+            "value": 22.56814144310003,
+            "range": {
+                "MIN": 0,
+                "MAX": 127
+            },
+            "description": "live.slider",
+            "presentation_rect": [
+                293.2203253507614,
+                91.52541947364807,
+                39,
+                95
+            ],
+            "min": 0,
+            "max": 127
+        },
+        "live.toggle": {
+            "index": 12,
+            "varname": "live.toggle",
+            "maxclass": "live.toggle",
+            "path": "/live.toggle",
+            "type": "bool",
+            "value": 0,
+            "range": {
+                "MIN": 0,
+                "MAX": 1
+            },
+            "description": "live.toggle",
+            "presentation_rect": [
+                250.84744596481323,
+                240.67795491218567,
+                15,
+                15
+            ],
+            "min": 0,
+            "max": 1,
+            "steps": 2
+        },
+        "live.tab": {
+            "index": 13,
+            "varname": "live.tab",
+            "maxclass": "live.tab",
+            "path": "/live.tab",
+            "type": "enum",
+            "value": 2,
+            "range": null,
+            "description": "live.tab",
+            "presentation_rect": [
+                301.69490122795105,
+                191.52541482448578,
+                100,
+                20
+            ]
+        },
+        "live.numbox": {
+            "index": 24,
+            "varname": "live.numbox",
+            "maxclass": "live.numbox",
+            "path": "/live.numbox",
+            "type": "float",
+            "value": 40,
+            "range": {
+                "MIN": 0,
+                "MAX": 127
+            },
+            "description": "live.numbox",
+            "presentation_rect": [
+                23.72881245613098,
+                28.813557982444763,
+                44,
+                15
+            ],
+            "min": 0,
+            "max": 127
+        },
+        "live.numbox[1]": {
+            "index": 25,
+            "varname": "live.numbox[1]",
+            "maxclass": "live.numbox",
+            "path": "/live.numbox[1]",
+            "type": "float",
+            "value": 62.999999999999986,
+            "range": {
+                "MIN": 0,
+                "MAX": 127
+            },
+            "description": "live.numbox",
+            "presentation_rect": [
+                38.98304903507233,
+                44.06779456138611,
+                44,
+                15
+            ],
+            "min": 0,
+            "max": 127
+        },
+        "live.numbox[2]": {
+            "index": 26,
+            "varname": "live.numbox[2]",
+            "maxclass": "live.numbox",
+            "path": "/live.numbox[2]",
+            "type": "float",
+            "value": 0,
+            "range": {
+                "MIN": 0,
+                "MAX": 127
+            },
+            "description": "live.numbox",
+            "presentation_rect": [
+                54.23728561401367,
+                57.627115964889526,
+                44,
+                15
+            ],
+            "min": 0,
+            "max": 127
+        },
+        "live.numbox[3]": {
+            "index": 27,
+            "varname": "live.numbox[3]",
+            "maxclass": "live.numbox",
+            "path": "/live.numbox[3]",
+            "type": "float",
+            "value": 60.999999999999936,
+            "range": {
+                "MIN": 0,
+                "MAX": 127
+            },
+            "description": "live.numbox",
+            "presentation_rect": [
+                69.49152219295502,
+                72.88135254383087,
+                44,
+                15
+            ],
+            "min": 0,
+            "max": 127
+        },
+        "live.numbox[4]": {
+            "index": 28,
+            "varname": "live.numbox[4]",
+            "maxclass": "live.numbox",
+            "path": "/live.numbox[4]",
+            "type": "float",
+            "value": 0,
+            "range": {
+                "MIN": 0,
+                "MAX": 127
+            },
+            "description": "live.numbox",
+            "presentation_rect": [
+                84.74575877189636,
+                88.13558912277222,
+                44,
+                15
+            ],
+            "min": 0,
+            "max": 127
+        }
+    }
