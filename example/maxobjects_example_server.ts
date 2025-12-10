@@ -158,6 +158,10 @@ createServerFromMaxObjects(jsonPath, {
 	.then((service) => {
 		console.log("\nServer is running. Press Ctrl+C to stop.");
 		// service.sendValue("/live.dial", 55);
+		// send value to all clients random
+		setInterval(() => {
+			service.sendValue("/live.dial", Math.random() * 100);
+		}, 1000);
 	})
 	.catch((error) => {
 		console.error("Failed to start server:", error);

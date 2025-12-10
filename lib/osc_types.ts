@@ -80,5 +80,4 @@ export interface HostInfo {
 	oscTransport?: "TCP" | "UDP";
 	wsIp?: string;
 	wsPort?: number;
-	broadcast?: boolean;
 }

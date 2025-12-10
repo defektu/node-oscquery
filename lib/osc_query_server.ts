@@ -394,7 +394,6 @@ export class OSCQueryServer {
 			oscTransport: this._opts.oscTransport || "UDP",
 			wsIp: this._opts.wsIp || this._opts.bindAddress || "0.0.0.0",
 			wsPort: wsPort,
-			broadcast: this._opts.broadcast,
 		};
 	}
 
