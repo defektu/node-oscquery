@@ -20,6 +20,7 @@ export interface OSCQueryServiceOptions {
 	serviceName?: string,
 	wsIp?: string,
 	wsPort?: number,
+	broadcast?: boolean,
 }
 
 const EXTENSIONS = {
@@ -563,10 +564,10 @@ export class OSCQueryServer {
 				console.error(`Failed to set value for ${path} argument ${i}:`, err);
 			}
 		}
-
-		// Broadcast the change
-		if (this._wsServer) {
-			this._wsServer.broadcastPathChanged(path);
+		// broadcast oscquery message to all clients except sender (only if broadcast is enabled)
+		if (this._opts.broadcast && this._wsServer) {
+			this._wsServer.broadcastOSCMessage(path, args);
+			console.log("Broadcasted OSC message", path, args);
 		}
 	}
 }

@@ -147,6 +147,8 @@ export class OSCQueryWebSocketServer {
 
 		// Send to all clients subscribed to this path or any parent path
 		for (const client of this._wsClients) {
+
+			console.log("Sending OSC message to client", client.ws.readyState);
 			if (client.ws.readyState === WebSocket.OPEN) {
 				// Check if client is subscribed to this path or any parent
 				let shouldNotify = false;
