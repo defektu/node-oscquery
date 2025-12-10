@@ -91,6 +91,7 @@ async function createServerFromMaxObjects(
 	// Create OSCQuery server
 	const options: OSCQueryServiceOptions = {
 		serviceName: "MaxObjectsOSCQuery",
+		broadcast: true,
 		...serviceOptions,
 	};
 	const service = new OSCQueryServer(options);
