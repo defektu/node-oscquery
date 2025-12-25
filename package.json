@@ -9,6 +9,7 @@
     "prepack": "tsc",
     "dev": "npx ts-node-dev --respawn --transpile-only example/simple_example_server.ts",
     "dev2": "npx ts-node-dev --respawn --transpile-only example/maxobjects_example_server.ts",
+    "dev3": "npx ts-node-dev --respawn --transpile-only example/discovery_example.ts",
     "osc-example": "npx ts-node-dev --respawn --transpile-only example/osc_example_server.ts"
   },
   "repository": {

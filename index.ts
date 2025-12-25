@@ -18,6 +18,13 @@ import {
 } from "./lib/osc_query_discovery";
 
 import {
+	MDNSDiscovery,
+	DiscoveredMDNSService,
+	MDNSDiscoveryOptions,
+	MulticastDNSOptions,
+} from "./lib/mdns_discovery";
+
+import {
 	OSCMethodDescription,
 	OSCMethodArgument,
 } from "./lib/osc_method_description";
@@ -35,4 +42,8 @@ export {
 	HostInfo,
 	OSCQueryDiscovery,
 	DiscoveredService,
+	MDNSDiscovery,
+	DiscoveredMDNSService,
+	MDNSDiscoveryOptions,
+	MulticastDNSOptions,
 };

@@ -1,10 +1,20 @@
 import { EventEmitter } from "node:events";
-import Bonjour, { type Browser, type Service } from "bonjour-service";
 import axios from "axios";
 import { SerializedHostInfo, SerializedNode, SerializedRange } from "./serialized_node";
 import { OSCMethodArgument } from "./osc_method_description";
 import { OSCQAccessMap, OSCQRange, OSCType, OSCTypeSimpleMap, HostInfo } from "./osc_types";
 import { OSCNode } from "./osc_node";
+import { MDNSDiscovery } from "./mdns_discovery";
+
+/**
+ * Check if an address is IPv4 (not IPv6)
+ */
+function isIPv4(address: string): boolean {
+	// IPv6 addresses contain colons (and possibly multiple colons)
+	// Simple check: if it contains colons, it's likely IPv6
+	// More robust: count colons - IPv4 has no colons, IPv6 has multiple
+	return !address.includes(":");
+}
 
 function deserializeHostInfo(host_info: SerializedHostInfo): HostInfo {
 	return {
@@ -147,10 +157,15 @@ export class DiscoveredService {
 	flat() {
 		return Array.from(this.nodes._methodGenerator());
 	}
-
 	async update() {
-		const baseResp = await axios.get<SerializedNode>("http://" + this.address + ":" + this.port);
-		const hostInfoResp = await axios.get<SerializedHostInfo>("http://" + this.address + ":" + this.port + "?HOST_INFO");
+		console.log("Updating service", this.address, this.port);
+		// Only use IPv4 addresses for HTTP requests
+		if (!isIPv4(this.address)) {
+			throw new Error(`Skipping IPv6 address ${this.address}, only IPv4 addresses are supported for HTTP requests`);
+		}
+		const baseUrl = `http://${this.address}:${this.port}`;
+		const baseResp = await axios.get<SerializedNode>(baseUrl);
+		const hostInfoResp = await axios.get<SerializedHostInfo>(baseUrl + "?HOST_INFO");
 
 		this._hostInfo = deserializeHostInfo(hostInfoResp.data);
 		this._nodes = deserializeMethodNode(baseResp.data);
@@ -174,41 +189,36 @@ export class DiscoveredService {
 }
 
 export class OSCQueryDiscovery extends EventEmitter {
-	private _mdns: Bonjour | null = null;
-	private _mdnsBrowser: Browser | null = null;
+	private _mdnsDiscovery: MDNSDiscovery | null = null;
 	private _services: DiscoveredService[] = [];
 
 	constructor() {
 		super();
 	}
 
-	_handleUp(service: Service) {
-		if (service.protocol != "tcp") {
-			return; // OSCQuery always uses TCP
+	_handleUp(mdnsService: { address: string; port: number }) {
+		// Only process OSCQuery services with IPv4 addresses
+		if (mdnsService.address && mdnsService.port && isIPv4(mdnsService.address)) {
+			this.queryNewService(mdnsService.address, mdnsService.port).catch((err) => {
+				this.emit("error", err);
+			});
 		}
-
-		service.addresses?.map(address => {
-			this.queryNewService(address, service.port).catch(err => this.emit(err));
-		});
 	}
 
-	_handleDown(service: Service) {
-		service.addresses?.forEach(address => {
-			const existingIndex = this._services.findIndex(s => s.address == address && s.port == service.port);
+	_handleDown(mdnsService: { address: string; port: number }) {
+		const existingIndex = this._services.findIndex(
+			(s) => s.address == mdnsService.address && s.port == mdnsService.port
+		);
 
-			if (existingIndex > -1) {
-				const removedService = this._services[existingIndex];
-				this.emit("down", removedService);
-				this._services.splice(existingIndex, 1);
-			}
-		});
+		if (existingIndex > -1) {
+			const removedService = this._services[existingIndex];
+			this.emit("down", removedService);
+			this._services.splice(existingIndex, 1);
+		}
 	}
 
 	async queryNewService(address: string, port: number): Promise<DiscoveredService> {
-		const service = new DiscoveredService(
-			address,
-			port,
-		);
+		const service = new DiscoveredService(address, port);
 
 		await service.update();
 
@@ -218,33 +228,43 @@ export class OSCQueryDiscovery extends EventEmitter {
 	}
 
 	start() {
-		if (this._mdns || this._mdnsBrowser) {
+		if (this._mdnsDiscovery) {
 			return;
 		}
 
-		this._mdns = new Bonjour(undefined, (err: any) => {
-			this.emit("error", err);
+		// Use MDNSDiscovery to discover OSCQuery services
+		// MDNSDiscovery automatically detects the correct network interface for network discovery
+		this._mdnsDiscovery = new MDNSDiscovery({
+			serviceTypes: ["oscjson"],
+			protocol: "tcp",
+			errorCallback: (err: any) => {
+				this.emit("error", err);
+			},
 		});
 
-		this._mdnsBrowser = this._mdns.find({
-			type: "oscjson",
-			protocol: "tcp"
+		// Forward MDNSDiscovery events
+		this._mdnsDiscovery.on("up", (mdnsService) => {
+			// Only process if it's an OSCQuery service (type check)
+			if (mdnsService.type === "oscjson" || mdnsService.fullType.includes("oscjson")) {
+				this._handleUp(mdnsService);
+			}
 		});
 
-		this._mdnsBrowser.on("up", this._handleUp.bind(this));
-		this._mdnsBrowser.on("down", this._handleDown.bind(this));
+		this._mdnsDiscovery.on("down", (mdnsService) => {
+			this._handleDown(mdnsService);
+		});
+
+		// Start discovery - this will automatically detect and use the correct network interface
+		this._mdnsDiscovery.start();
 	}
 
 	stop() {
-		if (!this._mdns || !this._mdnsBrowser) {
+		if (!this._mdnsDiscovery) {
 			return;
 		}
 
-		this._mdnsBrowser.stop();
-		this._mdns.destroy();
-
-		this._mdnsBrowser = null;
-		this._mdns = null;
+		this._mdnsDiscovery.stop();
+		this._mdnsDiscovery = null;
 	}
 
 	getServices() {

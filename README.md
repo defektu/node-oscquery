@@ -123,6 +123,7 @@ This is useful for synchronizing local state changes with networked OSCQuery/OSC
 
 **start**()  
 Start the mDNS browser to find OSCQuery services on the network.
+Automatically detects and uses the correct network interface for network-wide discovery.
 If the browser finds one, an `up` event will be emitted, and if a service announces it is shutting down, a `down` event will be emitted (both documented below).
 
 **stop**()  
@@ -144,6 +145,69 @@ The handler is called with a single `DiscoveredService` argument.
 **down**  
 Emitted every time a service announces its departure.
 The handler is called with a single `DiscoveredService` argument.
+
+## `MDNSDiscovery`
+
+A generic mDNS discovery class for discovering any service type via mDNS/Bonjour.
+Automatically detects the correct network interface for network-wide discovery (especially important on Windows).
+
+**constructor**(options: `MDNSDiscoveryOptions`)  
+Creates a new MDNSDiscovery instance. Options:
+- `serviceTypes?: string[]` - Service types to discover (e.g., `["http", "_http._tcp", "oscjson"]`)
+- `protocol?: "tcp" | "udp"` - Protocol to use (default: `"tcp"`)
+- `errorCallback?: (err: any) => void` - Optional error callback
+
+**start**(serviceTypes?: `string[]`)  
+Start discovery for the configured service types. Automatically detects the correct network interface.
+
+**stop**()  
+Stop discovery and clean up.
+
+**getServices**(): `DiscoveredMDNSService[]`  
+Get all currently discovered services.
+
+**getServicesByType**(type: `string`): `DiscoveredMDNSService[]`  
+Get services filtered by type.
+
+**isRunning**(): `boolean`  
+Check if discovery is currently running.
+
+### Events
+
+**up**  
+Emitted when a new service is discovered.
+The handler is called with a `DiscoveredMDNSService` argument containing:
+- `address`: Service IP address
+- `port`: Service port
+- `name`: Service name
+- `type`: Service type
+- `fullType`: Full service type (e.g., `"http._tcp.local"`)
+- `host`: Hostname
+- `txt`: TXT record data
+
+**down**  
+Emitted when a service is removed.
+The handler is called with a `DiscoveredMDNSService` argument.
+
+**error**  
+Emitted when an error occurs during discovery.
+
+### Example
+
+```ts
+import { MDNSDiscovery } from "oscquery";
+
+const discovery = new MDNSDiscovery({
+  serviceTypes: ["_http._tcp", "_https._tcp"],
+  protocol: "tcp"
+});
+
+discovery.on("up", (service) => {
+  console.log(`Discovered ${service.fullType}: ${service.name} at ${service.address}:${service.port}`);
+});
+
+discovery.start();
+```
 
 ## `OSCMethodDescription`
 
