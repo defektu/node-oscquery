@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { networkInterfaces } from "node:os";
+import { networkInterfaces, platform } from "node:os";
 import Bonjour, { ServiceConfig, type Browser, type Service } from "bonjour-service";
 
 /**
@@ -186,11 +186,13 @@ export class MDNSDiscovery extends EventEmitter {
 
 		// Pass multicast-dns options to enable network discovery
 		// On Windows, we may need to explicitly specify the interface IP
+		// On macOS, do NOT specify interface as it conflicts with mDNSResponder (EADDRINUSE on port 5353)
 		const mdnsOptions: MulticastDNSOptions = {
 			multicast: true, // Use UDP multicasting for network discovery
 			// On Windows, explicitly setting interface may be required for network discovery
-			// If we found a network interface, use it; otherwise let multicast-dns decide
-			...(primaryNetworkIP ? { interface: primaryNetworkIP } : {}),
+			// On macOS, omit interface to avoid bind conflicts with system mDNSResponder
+			// If we found a network interface and we're not on macOS, use it; otherwise let multicast-dns decide
+			...(primaryNetworkIP && platform() !== "darwin" ? { interface: primaryNetworkIP } : {}),
 		};
 
 		// For discovery/browsing, pass multicast-dns options (not service config options)
@@ -199,6 +201,7 @@ export class MDNSDiscovery extends EventEmitter {
 		this._mdns = new Bonjour(mdnsOptions as any, (err: any) => {
 			this.emit("error", err);
 		});
+
 		// Create browsers for each service type
 		typesToDiscover.forEach((serviceType) => {
 			const cleanType = this._normalizeServiceType(serviceType);
