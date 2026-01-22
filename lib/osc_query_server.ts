@@ -55,44 +55,8 @@ const VALID_ATTRIBUTES = [
 
 function respondJson(json: Object, res: http.ServerResponse) {
 	res.setHeader("Content-Type", "application/json");
-	
-	try {
-		// Use a custom replacer to handle circular references and prevent OSCNode serialization
-		const seen = new WeakSet();
-		const jsonString = JSON.stringify(json, (key, value) => {
-			// Skip OSCNode instances (they should be serialized via .serialize() method)
-			if (value && typeof value === 'object' && value !== null) {
-				// Check if it's an OSCNode by checking for characteristic properties
-				// OSCNode has _parent, _name, _children properties
-				if ('_parent' in value || ('_children' in value && '_name' in value)) {
-					// This looks like an OSCNode that wasn't properly serialized
-					console.error('Warning: OSCNode instance found in JSON serialization at key:', key);
-					return '[OSCNode - should be serialized]';
-				}
-				
-				// Handle circular references
-				if (seen.has(value)) {
-					return '[Circular]';
-				}
-				seen.add(value);
-			}
-			
-			return value;
-		});
-		
-		res.write(jsonString);
-		res.end();
-	} catch (error) {
-		// If JSON.stringify still fails, send an error response
-		console.error('Error serializing JSON response:', error);
-		res.statusCode = 500;
-		res.setHeader("Content-Type", "application/json");
-		res.write(JSON.stringify({ 
-			error: 'Failed to serialize response',
-			message: error instanceof Error ? error.message : String(error)
-		}));
-		res.end();
-	}
+	res.write(JSON.stringify(json));
+	res.end();
 }
 
 /**

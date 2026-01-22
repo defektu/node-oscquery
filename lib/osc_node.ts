@@ -234,4 +234,12 @@ export class OSCNode {
 
 		return result;
 	}
+
+	/**
+	 * Custom JSON serialization method to prevent circular reference errors
+	 * This is automatically called by JSON.stringify() when serializing OSCNode objects
+	 */
+	toJSON(): SerializedNode {
+		return this.serialize();
+	}
 }
