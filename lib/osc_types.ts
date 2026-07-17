@@ -54,6 +54,10 @@ export type OSCQClipmodeSingle = "none" | "low" | "high" | "both";
 
 export type OSCQClipmode = OSCQClipmodeSingle | null | OSCQClipmode[];
 
+export type OSCQExtendedType = string | null | OSCQExtendedType[];
+
+export type OSCQUnit = string | null | OSCQUnit[];
+
 export enum OSCQAccess {
 	NO_VALUE = 0,
 	READONLY = 1,

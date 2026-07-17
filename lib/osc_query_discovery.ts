@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import axios from "axios";
 import { SerializedHostInfo, SerializedNode, SerializedRange } from "./serialized_node";
-import { OSCMethodArgument } from "./osc_method_description";
+import { OSCMethodArgument, OSCMethodDescription } from "./osc_method_description";
 import { OSCQAccessMap, OSCQRange, OSCType, OSCTypeSimpleMap, HostInfo } from "./osc_types";
 import { OSCNode } from "./osc_node";
 import { MDNSDiscovery } from "./mdns_discovery";
@@ -14,6 +14,19 @@ function isIPv4(address: string): boolean {
 	// Simple check: if it contains colons, it's likely IPv6
 	// More robust: count colons - IPv4 has no colons, IPv6 has multiple
 	return !address.includes(":");
+}
+
+/**
+ * Format an IP address for use in a URL
+ * IPv6 addresses need to be wrapped in brackets
+ */
+function formatAddressForURL(address: string): string {
+	if (isIPv4(address)) {
+		return address;
+	} else {
+		// IPv6 address - wrap in brackets
+		return `[${address}]`;
+	}
 }
 
 function deserializeHostInfo(host_info: SerializedHostInfo): HostInfo {
@@ -112,6 +125,14 @@ function deserializeMethodNode(node: SerializedNode, parent?: OSCNode): OSCNode 
 				method_arg.clipmode = node.CLIPMODE[i]!;
 			}
 
+			if (node.EXTENDED_TYPE && node.EXTENDED_TYPE[i]) {
+				method_arg.extendedType = node.EXTENDED_TYPE[i]!;
+			}
+
+			if (node.UNIT && node.UNIT[i]) {
+				method_arg.unit = node.UNIT[i]!;
+			}
+
 			if (node.VALUE && node.VALUE[i] !== undefined) {
 				method_arg.value = node.VALUE[i];
 			}
@@ -120,12 +141,64 @@ function deserializeMethodNode(node: SerializedNode, parent?: OSCNode): OSCNode 
 		}
 	}
 
+	// Handle OVERLOADS if present
+	let overloads: OSCMethodDescription[] | undefined = undefined;
+	if (node.OVERLOADS && node.OVERLOADS.length > 0) {
+		overloads = node.OVERLOADS.map(overloadNode => {
+			const overloadDesc: OSCMethodDescription = {};
+			
+			if (overloadNode.DESCRIPTION) overloadDesc.description = overloadNode.DESCRIPTION;
+			if (overloadNode.ACCESS) overloadDesc.access = OSCQAccessMap[overloadNode.ACCESS];
+			if (overloadNode.TAGS) overloadDesc.tags = overloadNode.TAGS;
+			if (overloadNode.CRITICAL) overloadDesc.critical = overloadNode.CRITICAL;
+			
+			// Parse overload arguments
+			if (overloadNode.TYPE) {
+				const overload_args: OSCMethodArgument[] = [];
+				let overload_types = parseTypeString(overloadNode.TYPE);
+				
+				if (!Array.isArray(overload_types)) {
+					overload_types = [overload_types];
+				}
+				
+				for (let i = 0; i < overload_types.length; i++) {
+					const overload_arg: OSCMethodArgument = {
+						type: overload_types[i],
+					};
+					
+					if (overloadNode.RANGE && overloadNode.RANGE[i] !== null) {
+						overload_arg.range = deserializeRange(overloadNode.RANGE[i]!);
+					}
+					if (overloadNode.CLIPMODE && overloadNode.CLIPMODE[i]) {
+						overload_arg.clipmode = overloadNode.CLIPMODE[i]!;
+					}
+					if (overloadNode.EXTENDED_TYPE && overloadNode.EXTENDED_TYPE[i]) {
+						overload_arg.extendedType = overloadNode.EXTENDED_TYPE[i]!;
+					}
+					if (overloadNode.UNIT && overloadNode.UNIT[i]) {
+						overload_arg.unit = overloadNode.UNIT[i]!;
+					}
+					if (overloadNode.VALUE && overloadNode.VALUE[i] !== undefined) {
+						overload_arg.value = overloadNode.VALUE[i];
+					}
+					
+					overload_args.push(overload_arg);
+				}
+				
+				overloadDesc.arguments = overload_args;
+			}
+			
+			return overloadDesc;
+		});
+	}
+
 	osc_node.setOpts({
 		description: node.DESCRIPTION,
 		access: node.ACCESS ? OSCQAccessMap[node.ACCESS] : undefined,
 		tags: node.TAGS,
 		critical: node.CRITICAL,
 		arguments: method_arguments,
+		overloads: overloads,
 	});
 
 	return osc_node;
@@ -158,12 +231,8 @@ export class DiscoveredService {
 		return Array.from(this.nodes._methodGenerator());
 	}
 	async update() {
-		console.log("Updating service", this.address, this.port);
-		// Only use IPv4 addresses for HTTP requests
-		if (!isIPv4(this.address)) {
-			throw new Error(`Skipping IPv6 address ${this.address}, only IPv4 addresses are supported for HTTP requests`);
-		}
-		const baseUrl = `http://${this.address}:${this.port}`;
+		const formattedAddress = formatAddressForURL(this.address);
+		const baseUrl = `http://${formattedAddress}:${this.port}`;
 		const baseResp = await axios.get<SerializedNode>(baseUrl);
 		const hostInfoResp = await axios.get<SerializedHostInfo>(baseUrl + "?HOST_INFO");
 
@@ -197,8 +266,8 @@ export class OSCQueryDiscovery extends EventEmitter {
 	}
 
 	_handleUp(mdnsService: { address: string; port: number }) {
-		// Only process OSCQuery services with IPv4 addresses
-		if (mdnsService.address && mdnsService.port && isIPv4(mdnsService.address)) {
+		// Process OSCQuery services with both IPv4 and IPv6 addresses
+		if (mdnsService.address && mdnsService.port) {
 			this.queryNewService(mdnsService.address, mdnsService.port).catch((err) => {
 				this.emit("error", err);
 			});
