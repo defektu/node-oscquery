@@ -17,6 +17,9 @@ export type SerializedNode = {
 	TAGS?: string[],
 	CRITICAL?: boolean,
 	CLIPMODE?: (OSCQClipmode | null)[],
+	EXTENDED_TYPE?: (string | null)[],
+	UNIT?: (string | null)[],
+	OVERLOADS?: SerializedNode[],
 	VALUE?: (unknown | null)[],
 }
 

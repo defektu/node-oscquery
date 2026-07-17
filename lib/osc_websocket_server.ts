@@ -1,5 +1,11 @@
 import { WebSocketServer, WebSocket } from "ws";
 
+export interface Logger {
+	log?: (...args: unknown[]) => void;
+	warn?: (...args: unknown[]) => void;
+	error?: (...args: unknown[]) => void;
+}
+
 export interface WebSocketClient {
 	ws: WebSocket;
 	subscribedPaths: Set<string>;
@@ -14,14 +20,29 @@ export interface OSCQueryWebSocketServerOptions {
 	port?: number;
 	host?: string;
 	server?: any; // http.Server for attached mode
+	logger?: Logger | boolean;
 }
 
 export class OSCQueryWebSocketServer {
 	private _wsServer: WebSocketServer | null = null;
 	private _wsClients: Set<WebSocketClient> = new Set();
 	private _onOSCMessage?: (path: string, args: unknown[]) => void;
+	private _logger: Logger;
 
-	constructor(private _opts: OSCQueryWebSocketServerOptions) {}
+	constructor(private _opts: OSCQueryWebSocketServerOptions) {
+		// Set up logger
+		if (this._opts.logger === true) {
+			this._logger = console;
+		} else if (this._opts.logger === false || this._opts.logger === undefined) {
+			this._logger = {
+				log: () => {},
+				warn: () => {},
+				error: () => {},
+			};
+		} else {
+			this._logger = this._opts.logger;
+		}
+	}
 
 	/**
 	 * Start the WebSocket server
@@ -148,7 +169,7 @@ export class OSCQueryWebSocketServer {
 		// Send to all clients subscribed to this path or any parent path
 		for (const client of this._wsClients) {
 
-			console.log("Sending OSC message to client", client.ws.readyState);
+			this._logger.log?.("Sending OSC message to client", client.ws.readyState);
 			if (client.ws.readyState === WebSocket.OPEN) {
 				// Check if client is subscribed to this path or any parent
 				let shouldNotify = false;
@@ -200,6 +221,54 @@ export class OSCQueryWebSocketServer {
 	}
 
 	/**
+	 * Broadcast PATH_ADDED message to all clients
+	 */
+	broadcastPathAdded(path: string) {
+		if (this._wsClients.size === 0) {
+			return;
+		}
+
+		const message = JSON.stringify({
+			COMMAND: "PATH_ADDED",
+			DATA: path,
+		});
+
+		for (const client of this._wsClients) {
+			if (client.ws.readyState === WebSocket.OPEN) {
+				try {
+					client.ws.send(message);
+				} catch (err) {
+					this._wsClients.delete(client);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Broadcast PATH_REMOVED message to all clients
+	 */
+	broadcastPathRemoved(path: string) {
+		if (this._wsClients.size === 0) {
+			return;
+		}
+
+		const message = JSON.stringify({
+			COMMAND: "PATH_REMOVED",
+			DATA: path,
+		});
+
+		for (const client of this._wsClients) {
+			if (client.ws.readyState === WebSocket.OPEN) {
+				try {
+					client.ws.send(message);
+				} catch (err) {
+					this._wsClients.delete(client);
+				}
+			}
+		}
+	}
+
+	/**
 	 * Get number of connected clients
 	 */
 	getClientCount(): number {
@@ -207,7 +276,7 @@ export class OSCQueryWebSocketServer {
 	}
 
 	private _handleWebSocketConnection(ws: WebSocket) {
-		console.log("WebSocket client connected");
+		this._logger.log?.("WebSocket client connected");
 
 		const client: WebSocketClient = {
 			ws,
@@ -221,7 +290,7 @@ export class OSCQueryWebSocketServer {
 		});
 
 		ws.on("close", (code: number, reason: Buffer) => {
-			console.log("WebSocket client disconnected", {
+			this._logger.log?.("WebSocket client disconnected", {
 				code,
 				reason: reason.toString(),
 			});
@@ -229,12 +298,12 @@ export class OSCQueryWebSocketServer {
 		});
 
 		ws.on("error", (error: Error) => {
-			console.error("WebSocket client error", error);
+			this._logger.error?.("WebSocket client error", error);
 			this._wsClients.delete(client);
 		});
 
 		if (ws.readyState === WebSocket.OPEN) {
-			console.log("WebSocket connection is open and ready");
+			this._logger.log?.("WebSocket connection is open and ready");
 		}
 	}
 
@@ -245,7 +314,7 @@ export class OSCQueryWebSocketServer {
 			try {
 				const decoded = this._decodeOSCMessage(data);
 				if (decoded) {
-					console.log("WebSocket binary OSC message received", {
+					this._logger.log?.("WebSocket binary OSC message received", {
 						path: decoded.path,
 						args: decoded.args,
 					});
@@ -256,7 +325,7 @@ export class OSCQueryWebSocketServer {
 					}
 				}
 			} catch (err) {
-				console.error("Failed to decode OSC binary message", err);
+				this._logger.error?.("Failed to decode OSC binary message", err);
 			}
 		} else {
 			// Try to parse as JSON
@@ -264,9 +333,9 @@ export class OSCQueryWebSocketServer {
 				const messageStr = data.toString("utf8");
 				const message: WebSocketMessage = JSON.parse(messageStr);
 				this._handleWebSocketMessage(client, message);
-				console.log("WebSocket JSON message received", message);
+				this._logger.log?.("WebSocket JSON message received", message);
 			} catch (err) {
-				console.log("WebSocket: Failed to parse message as JSON", {
+				this._logger.log?.("WebSocket: Failed to parse message as JSON", {
 					error: err,
 					dataLength: data.length,
 					dataPreview: data.toString("utf8").substring(0, 100),
@@ -501,7 +570,7 @@ export class OSCQueryWebSocketServer {
 				argBuffers.push(arg);
 				argBuffers.push(Buffer.alloc(blobPadding));
 			} else {
-				console.error("Unsupported type", typeof arg);
+				this._logger.error?.("Unsupported type", typeof arg);
 				// Unsupported type, skip
 				continue;
 			}

@@ -62,13 +62,15 @@ Every extension that is implemented should have full compliance with the spec ho
 | RANGE | ✅ |
 | DESCRIPTION | ✅ |
 | TAGS | ✅ |
-| EXTENDED_TYPE | ❌ |
-| UNIT | ❌ |
+| EXTENDED_TYPE | ✅ |
+| UNIT | ✅ |
 | CRITICAL | ✅ |
 | CLIPMODE | ✅ |
-| OVERLOADS | ❌ |
+| OVERLOADS | ✅ |
 | HTML | ❌ |
 | Bi-Directional Communication | ✅ |
+| PATH_ADDED | ✅ |
+| PATH_REMOVED | ✅ |
 
 # Classes & Methods
 
@@ -84,8 +86,10 @@ Creates a new instance of the server. The options object has the following field
 - `oscPort`: OSC_PORT field of the HOST_INFO attribute. If not specified, the `httpPort` is used instead.
 - `oscTransport`: OSC_TRANSPORT of the HOST_INFO attribute. (Default: "UDP")
 - `wsIp`: WS_IP field of the HOST_INFO attribute. If not specified, the `bindAddress` is used instead.
-- `wsPort`: WS_PORT field of the HOST_INFO attribute. If not specified, a random free port will be chosen.
+- `wsPort`: WS_PORT field of the HOST_INFO attribute. If not specified, the `httpPort` is used instead (attached mode).
 - `serviceName`: Name of the mDNS service. (Default: "OSCQuery")
+- `broadcast`: If true, OSC messages received by the server will be broadcast to all WebSocket clients. (Default: false)
+- `logger`: Optional logger for debug output. Can be `true` (use console), `false` (no logging, default), or a custom logger object with `log`, `warn`, and `error` methods.
 
 **start**(): `Promise<HostInfo>`  
 Starts the HTTP server and mDNS service to advertise its existence on the network.
@@ -116,6 +120,12 @@ Unsetting it will completely remove the VALUE attribute in case all arguments ar
 **sendValue**(path: `string`, ...args: `unknown[]`)  
 Sets the VALUE attribute(s) of the method at the given path (like `setValue`), but also broadcasts the new value(s) as an OSC binary message to all connected WebSocket clients.  
 This is useful for synchronizing local state changes with networked OSCQuery/OSC clients.
+
+**Events**
+
+The OSCQueryServer extends EventEmitter and emits the following events:
+
+- `osc:message` - Emitted when an OSC message is received (either via WebSocket or UDP). Handler signature: `(path: string, args: unknown[]) => void`
 
 
 
@@ -223,6 +233,7 @@ interface OSCMethodDescription {
 	tags?: string[],
 	critical?: boolean,
 	arguments?: OSCMethodArgument[];
+	overloads?: OSCMethodDescription[];
 }
 ```
 
@@ -233,6 +244,8 @@ interface OSCMethodArgument {
 	type: OSCType,
 	range?: OSCQRange,
 	clipmode?: OSCQClipmode,
+	extendedType?: string,
+	unit?: string,
 	value?: unknown,
 }
 ```

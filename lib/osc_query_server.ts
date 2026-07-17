@@ -1,4 +1,5 @@
 import http from "node:http";
+import { EventEmitter } from "node:events";
 import { getResponder, type Responder, type CiaoService, Protocol } from "@homebridge/ciao";
 import portfinder from "portfinder";
 import { Server as OSCServer } from "node-osc";
@@ -8,6 +9,12 @@ import { SerializedHostInfo, SerializedNode } from "./serialized_node";
 import { HostInfo, OSCQAccess } from "./osc_types";
 import { OSCMethodDescription } from "./osc_method_description";
 import { OSCQueryWebSocketServer } from "./osc_websocket_server";
+
+export interface Logger {
+	log?: (...args: unknown[]) => void;
+	warn?: (...args: unknown[]) => void;
+	error?: (...args: unknown[]) => void;
+}
 
 export interface OSCQueryServiceOptions {
 	httpPort?: number;
@@ -21,6 +28,7 @@ export interface OSCQueryServiceOptions {
 	wsIp?: string,
 	wsPort?: number,
 	broadcast?: boolean,
+	logger?: Logger | boolean,
 }
 
 const EXTENSIONS = {
@@ -29,14 +37,16 @@ const EXTENSIONS = {
 	RANGE: true,
 	DESCRIPTION: true,
 	TAGS: true,
-	// EXTENDED_TYPE 
-	// UNIT
+	EXTENDED_TYPE: true,
+	UNIT: true,
 	CRITICAL: true,
 	CLIPMODE: true,
-	// OVERLOADS
+	OVERLOADS: true,
 	// HTML
 	LISTEN: true, // Indicates WebSocket/bidirectional communication support
 	PATH_CHANGED: true, // Indicates server will send PATH_CHANGED messages
+	PATH_ADDED: true, // Indicates server will send PATH_ADDED messages
+	PATH_REMOVED: true, // Indicates server will send PATH_REMOVED messages
 }
 
 const VALID_ATTRIBUTES = [
@@ -47,8 +57,11 @@ const VALID_ATTRIBUTES = [
 	"RANGE",
 	"DESCRIPTION",
 	"TAGS",
+	"EXTENDED_TYPE",
+	"UNIT",
 	"CRITICAL",
 	"CLIPMODE",
+	"OVERLOADS",
 	"VALUE",
 	"HOST_INFO",
 ]
@@ -131,7 +144,7 @@ function sanitizeName(name: string): string {
 	return result;
 }
 
-export class OSCQueryServer {
+export class OSCQueryServer extends EventEmitter {
 	private _mdns: Responder;
 	private _mdnsService: CiaoService | null = null;
 	private _server: http.Server;
@@ -139,9 +152,24 @@ export class OSCQueryServer {
 	private _oscServer: OSCServer | null = null;
 	private _opts: OSCQueryServiceOptions;
 	private _root: OSCNode = new OSCNode("");
+	private _logger: Logger;
 
 	constructor(opts?: OSCQueryServiceOptions) {
+		super();
 		this._opts = opts || {};
+		
+		// Set up logger
+		if (this._opts.logger === true) {
+			this._logger = console;
+		} else if (this._opts.logger === false || this._opts.logger === undefined) {
+			this._logger = {
+				log: () => {},
+				warn: () => {},
+				error: () => {},
+			};
+		} else {
+			this._logger = this._opts.logger;
+		}
 
 		this._server = http.createServer(this._httpHandler.bind(this));
 
@@ -199,14 +227,19 @@ export class OSCQueryServer {
 				RANGE: EXTENSIONS.RANGE,
 				DESCRIPTION: EXTENSIONS.DESCRIPTION,
 				TAGS: EXTENSIONS.TAGS,
+				EXTENDED_TYPE: EXTENSIONS.EXTENDED_TYPE,
+				UNIT: EXTENSIONS.UNIT,
 				CRITICAL: EXTENSIONS.CRITICAL,
 				CLIPMODE: EXTENSIONS.CLIPMODE,
+				OVERLOADS: EXTENSIONS.OVERLOADS,
 			};
 			
 			// Only include WebSocket extensions if server is running
 			if (this._wsServer && this._wsServer.isRunning()) {
 				extensions.LISTEN = EXTENSIONS.LISTEN;
 				extensions.PATH_CHANGED = EXTENSIONS.PATH_CHANGED;
+				extensions.PATH_ADDED = EXTENSIONS.PATH_ADDED;
+				extensions.PATH_REMOVED = EXTENSIONS.PATH_REMOVED;
 			}
 
 			const hostInfo: SerializedHostInfo = {
@@ -286,15 +319,16 @@ export class OSCQueryServer {
 
 		// Create WebSocket server
 		if (isAttached) {
-			console.log("WebSocket server attached to HTTP server", {
+			this._logger.log?.("WebSocket server attached to HTTP server", {
 				port: this._opts.wsPort,
 				host: wsIp,
 			});
 			this._wsServer = new OSCQueryWebSocketServer({
 				server: this._server,
+				logger: this._opts.logger,
 			});
 		} else {
-			console.log("WebSocket server created on separate port", {
+			this._logger.log?.("WebSocket server created on separate port", {
 				port: this._opts.wsPort,
 				host: wsIp,
 			});
@@ -315,11 +349,11 @@ export class OSCQueryServer {
 				// WebSocket server is attached to HTTP server, so start it after HTTP server is ready
 				await httpListenPromise;
 				await this._wsServer!.start();
-				console.log("WebSocket server ready (attached to HTTP server)");
+				this._logger.log?.("WebSocket server ready (attached to HTTP server)");
 			} else {
 				// Separate WebSocket server - start it independently
 				await this._wsServer!.start();
-				console.log("WebSocket server listening on port", this._opts.wsPort);
+				this._logger.log?.("WebSocket server listening on port", this._opts.wsPort);
 			}
 		})();
 
@@ -350,7 +384,7 @@ export class OSCQueryServer {
 		if (oscTransport === "UDP") {
 			const oscListenPromise: Promise<void> = new Promise((resolve) => {
 				this._oscServer = new OSCServer(oscPort, oscIp, () => {
-					console.log(`OSC server is listening on port ${oscPort}`);
+					this._logger.log?.(`OSC server is listening on port ${oscPort}`);
 					resolve();
 				});
 			});
@@ -364,7 +398,7 @@ export class OSCQueryServer {
 			});
 
 			oscServer.on("error", (err) => {
-				console.error("OSC server error:", err);
+				this._logger.error?.("OSC server error:", err);
 			});
 
 			await Promise.all([
@@ -375,7 +409,7 @@ export class OSCQueryServer {
 			]);
 		} else {
 			// TCP not yet supported by node-osc, log a warning
-			console.warn(`OSC transport "${oscTransport}" is not yet supported, only UDP is available`);
+			this._logger.warn?.(`OSC transport "${oscTransport}" is not yet supported, only UDP is available`);
 			await Promise.all([
 				httpListenPromise,
 				wsListenPromise,
@@ -439,6 +473,7 @@ export class OSCQueryServer {
 
 		node.setOpts(params);
 		if (this._wsServer) {
+			this._wsServer.broadcastPathAdded(path);
 			this._wsServer.broadcastPathChanged(path);
 		}
 	}
@@ -463,6 +498,7 @@ export class OSCQueryServer {
 		}
 
 		if (this._wsServer) {
+			this._wsServer.broadcastPathRemoved(path);
 			this._wsServer.broadcastPathChanged(path);
 		}
 	}
@@ -500,11 +536,11 @@ export class OSCQueryServer {
 		// Update internal node values if path exists
 		if (node && args.length > 0) {
 			for (let i = 0; i < args.length; i++) {
-				try {
-					node.setValue(i, args[i]);
-				} catch (err) {
-					console.error(`Failed to set value for ${path} argument ${i}:`, err);
-				}
+			try {
+				node.setValue(i, args[i]);
+			} catch (err) {
+				this._logger.error?.(`Failed to set value for ${path} argument ${i}:`, err);
+			}
 			}
 		}
 
@@ -542,7 +578,7 @@ export class OSCQueryServer {
 		const node = this._getNodeForPath(path);
 
 		if (!node) {
-			console.log(`OSC message received for unknown path: ${path}`);
+			this._logger.log?.(`OSC message received for unknown path: ${path}`);
 			return;
 		}
 
@@ -552,7 +588,7 @@ export class OSCQueryServer {
 
 		// Check if node is writable
 		if (access === undefined || access === OSCQAccess.NO_VALUE || access === OSCQAccess.READONLY) {
-			console.log(`OSC message received for read-only path: ${path}`);
+			this._logger.log?.(`OSC message received for read-only path: ${path}`);
 			return;
 		}
 
@@ -561,13 +597,22 @@ export class OSCQueryServer {
 			try {
 				node.setValue(i, args[i]);
 			} catch (err) {
-				console.error(`Failed to set value for ${path} argument ${i}:`, err);
+				this._logger.error?.(`Failed to set value for ${path} argument ${i}:`, err);
 			}
 		}
+
+		// Emit event for application code to handle
+		this.emit('osc:message', path, args);
+
+		// Broadcast PATH_CHANGED to notify clients of the value update
+		if (this._wsServer) {
+			this._wsServer.broadcastPathChanged(path);
+		}
+
 		// broadcast oscquery message to all clients except sender (only if broadcast is enabled)
 		if (this._opts.broadcast && this._wsServer) {
 			this._wsServer.broadcastOSCMessage(path, args);
-			console.log("Broadcasted OSC message", path, args);
+			this._logger.log?.("Broadcasted OSC message", path, args);
 		}
 	}
 }

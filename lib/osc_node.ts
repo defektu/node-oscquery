@@ -1,6 +1,7 @@
 import { OSCType, OSCQClipmode, OSCQRange, OSCQAccess } from "./osc_types";
 import { SerializedNode, SerializedRange } from "./serialized_node";
 import { OSCMethodArgument, OSCMethodDescription } from "./osc_method_description";
+import { ArgumentIndexError } from "./errors";
 
 function getTypeString(type: OSCType): string {
 	if (Array.isArray(type)) {
@@ -49,6 +50,7 @@ export class OSCNode {
 	private _tags?: string[];
 	private _critical?: boolean;
 	private _args?: OSCMethodArgument[];
+	private _overloads?: OSCMethodDescription[];
 	private _children: Record<string, OSCNode> = {};
 
 	constructor(name: string, parent?: OSCNode) {
@@ -78,6 +80,7 @@ export class OSCNode {
 		if (this._tags) desc.tags = this._tags;
 		if (this._critical) desc.critical = this._critical;
 		if (this._args) desc.arguments = this._args;
+		if (this._overloads) desc.overloads = this._overloads;
 
 		return desc;
 	}
@@ -107,11 +110,12 @@ export class OSCNode {
 		this._tags = desc.tags;
 		this._critical = desc.critical;
 		this._args = desc.arguments;
+		this._overloads = desc.overloads;
 	}
 
 	setValue(arg_index: number, value: unknown) {
 		if (!this._args || arg_index >= this._args.length) {
-			throw new Error("Argument index out of range");
+			throw new ArgumentIndexError(assembleFullPath(this), arg_index);
 		}
 
 		this._args[arg_index].value = value;
@@ -119,7 +123,7 @@ export class OSCNode {
 
 	unsetValue(arg_index: number) {
 		if (!this._args || arg_index >= this._args.length) {
-			throw new Error("Argument index out of range");
+			throw new ArgumentIndexError(assembleFullPath(this), arg_index);
 		}
 
 		delete this._args[arg_index].value;
@@ -197,11 +201,25 @@ export class OSCNode {
 			}));
 		}
 
+		if (this._overloads && this._overloads.length > 0) {
+			result.OVERLOADS = this._overloads.map(overload => {
+				// Create a temporary node for serialization
+				const tempNode = new OSCNode(this._name, this._parent);
+				tempNode.setOpts(overload);
+				const serialized = tempNode.serialize();
+				// Remove CONTENTS from overload serialization as per spec
+				delete serialized.CONTENTS;
+				return serialized;
+			});
+		}
+
 		if (this._args) {
 			let arg_types: string = "";
 			// these are set to null in case one of the args doesn't specify them
 			let arg_ranges: (OSCQRange | null)[] = [];
 			let arg_clipmodes: (OSCQClipmode | null)[] | null = [];
+			let arg_extended_types: (string | null)[] = [];
+			let arg_units: (string | null)[] = [];
 			const arg_values: unknown[] = [];
 
 			for (const arg of this._args) {
@@ -209,6 +227,8 @@ export class OSCNode {
 				arg_values.push(arg.value ?? null);
 				arg_ranges.push(arg.range ?? null);
 				arg_clipmodes.push(arg.clipmode ?? null);
+				arg_extended_types.push(arg.extendedType ?? null);
+				arg_units.push(arg.unit ?? null);
 			}
 
 			result.TYPE = arg_types;
@@ -225,6 +245,14 @@ export class OSCNode {
 
 			if (!allNull(arg_clipmodes)) {
 				result.CLIPMODE = arg_clipmodes;
+			}
+
+			if (!allNull(arg_extended_types)) {
+				result.EXTENDED_TYPE = arg_extended_types;
+			}
+
+			if (!allNull(arg_units)) {
+				result.UNIT = arg_units;
 			}
 
 			if (this._access && !allNull(arg_values) && (this._access == 1 || this._access == 3)) {

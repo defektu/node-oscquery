@@ -29,6 +29,8 @@ import {
 	OSCMethodArgument,
 } from "./lib/osc_method_description";
 
+import { OSCNode } from "./lib/osc_node";
+
 export {
 	OSCQueryServer,
 	OSCQueryServiceOptions,
@@ -46,4 +48,7 @@ export {
 	DiscoveredMDNSService,
 	MDNSDiscoveryOptions,
 	MulticastDNSOptions,
+	OSCNode,
 };
+
+export * from "./lib/errors";
