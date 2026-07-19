@@ -48,6 +48,9 @@ function mapMaxTypeToOSCType(maxType: string): OSCTypeSimple {
 			return OSCTypeSimple.INT; // Booleans in Max are 0/1, use INT
 		case "enum":
 			return OSCTypeSimple.INT; // Enums are typically represented as integers
+		case "string":
+		case "text":
+			return OSCTypeSimple.STRING;
 		case "bang":
 		case "impulse":
 			return OSCTypeSimple.TRUE; // Bang/impulse can use TRUE as trigger
