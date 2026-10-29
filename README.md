@@ -1,9 +1,19 @@
 # OSCQuery for Node
-An implementation of the [OSCQuery proposal](https://github.com/Vidvox/OSCQueryProposal) for Node.js, written in TypeScript.
+
+[![npm version](https://img.shields.io/npm/v/@defektu/oscquery.svg)](https://www.npmjs.com/package/@defektu/oscquery)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/defektu/node-oscquery/actions)
+
+A full-featured implementation of the [OSCQuery proposal](https://github.com/Vidvox/OSCQueryProposal) for Node.js, written in TypeScript with complete protocol compliance.
+
+> **Note:** This is an enhanced fork of [jangxx/node-oscquery](https://github.com/jangxx/node-oscquery) with full OSCQuery specification compliance, modern TypeScript support, and comprehensive testing.
 
 ## Installation
 
-	npm install oscquery
+```bash
+npm install @defektu/oscquery
+```
 
 ## Simple example
 
@@ -12,7 +22,7 @@ import {
 	OSCQueryServer,
 	OSCTypeSimple,
 	OSCQAccess,
-} from "oscquery";
+} from "@defektu/oscquery";
 
 const service = new OSCQueryServer();
 
@@ -205,7 +215,7 @@ Emitted when an error occurs during discovery.
 ### Example
 
 ```ts
-import { MDNSDiscovery } from "oscquery";
+import { MDNSDiscovery } from "@defektu/oscquery";
 
 const discovery = new MDNSDiscovery({
   serviceTypes: ["_http._tcp", "_https._tcp"],
