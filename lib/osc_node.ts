@@ -270,4 +270,4 @@ export class OSCNode {
 	toJSON(): SerializedNode {
 		return this.serialize();
 	}
-}
+}

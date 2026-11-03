@@ -17,4 +17,4 @@ export interface OSCMethodArgument {
 	extendedType?: string,
 	unit?: string,
 	value?: unknown,
-}
+}

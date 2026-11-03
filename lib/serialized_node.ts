@@ -33,4 +33,4 @@ export type SerializedHostInfo = {
 	OSC_TRANSPORT?: "TCP" | "UDP";
 	WS_IP?: string;
 	WS_PORT?: number;
-};
+};
