@@ -1,4 +1,4 @@
-import { OSCQRange, OSCQClipmode, OSCType, OSCQAccess, OSCQExtendedType, OSCQUnit } from "./osc_types";
+import { OSCQRange, OSCQClipmode, OSCType, OSCQAccess, OSCQExtendedType, OSCQUnit } from "./osc_types.js";
 
 export interface OSCMethodDescription {
 	full_path?: string, // only used in the for the discovery

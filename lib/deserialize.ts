@@ -1,7 +1,7 @@
-import { SerializedHostInfo, SerializedNode, SerializedRange } from "./serialized_node";
-import { OSCMethodArgument, OSCMethodDescription } from "./osc_method_description";
-import { OSCQAccessMap, OSCQRange, OSCType, OSCTypeSimpleMap, HostInfo } from "./osc_types";
-import { OSCNode } from "./osc_node";
+import { SerializedHostInfo, SerializedNode, SerializedRange } from "./serialized_node.js";
+import { OSCMethodArgument, OSCMethodDescription } from "./osc_method_description.js";
+import { OSCQAccessMap, OSCQRange, OSCType, OSCTypeSimpleMap, HostInfo } from "./osc_types.js";
+import { OSCNode } from "./osc_node.js";
 
 export function deserializeHostInfo(host_info: SerializedHostInfo): HostInfo {
 	return {

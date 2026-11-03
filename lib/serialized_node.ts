@@ -1,4 +1,4 @@
-import { OSCQClipmode, OSCQExtendedType, OSCQUnit } from "./osc_types"
+import { OSCQClipmode, OSCQExtendedType, OSCQUnit } from "./osc_types.js"
 
 type SerializedRangeSingle = {
 	MIN?: number,

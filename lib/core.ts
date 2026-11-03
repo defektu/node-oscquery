@@ -4,7 +4,7 @@
  * Import it as `@defektu/oscquery/core`.
  */
 
-export { OSCTypeSimple, OSCTypeSimpleMap, OSCQAccess, OSCQAccessMap } from "./osc_types";
+export { OSCTypeSimple, OSCTypeSimpleMap, OSCQAccess, OSCQAccessMap } from "./osc_types.js";
 export type {
 	OSCType,
 	OSCQRange,
@@ -14,17 +14,17 @@ export type {
 	OSCQExtendedType,
 	OSCQUnit,
 	HostInfo,
-} from "./osc_types";
+} from "./osc_types.js";
 
-export type { OSCMethodDescription, OSCMethodArgument } from "./osc_method_description";
-export { OSCNode } from "./osc_node";
-export type { SerializedNode, SerializedRange, SerializedHostInfo } from "./serialized_node";
+export type { OSCMethodDescription, OSCMethodArgument } from "./osc_method_description.js";
+export { OSCNode } from "./osc_node.js";
+export type { SerializedNode, SerializedRange, SerializedHostInfo } from "./serialized_node.js";
 export {
 	deserializeHostInfo,
 	deserializeMethodDescription,
 	deserializeMethodNode,
 	deserializeRange,
 	parseTypeString,
-} from "./deserialize";
-export type { SerializedMethod } from "./deserialize";
-export * from "./errors";
+} from "./deserialize.js";
+export type { SerializedMethod } from "./deserialize.js";
+export * from "./errors.js";

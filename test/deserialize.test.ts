@@ -110,7 +110,7 @@ describe('deserializeMethodNode', () => {
 });
 
 describe('core entry point', () => {
-	it('only pulls in modules without Node.js or network dependencies', () => {
+	it('only pulls in local modules (no Node.js or network dependencies), imported with .js extensions', () => {
 		const libDir = join(__dirname, '..', 'lib');
 		const seen = new Set<string>();
 		const visit = (file: string) => {
@@ -118,8 +118,9 @@ describe('core entry point', () => {
 			seen.add(file);
 			const source = readFileSync(join(libDir, `${file}.ts`), 'utf8');
 			for (const [, spec] of source.matchAll(/from\s+"([^"]+)"/g)) {
-				expect(spec.startsWith('./'), `${file}.ts imports ${spec}`).toBe(true);
-				visit(spec.slice(2));
+				// Relative and with a .js extension, so the ES module build loads in Node as well.
+				expect(spec, `${file}.ts imports ${spec}`).toMatch(/^\.\/[a-z_]+\.js$/);
+				visit(spec.slice(2, -3));
 			}
 		};
 		visit('core');

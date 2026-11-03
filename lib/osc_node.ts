@@ -1,7 +1,7 @@
-import { OSCType, OSCQClipmode, OSCQRange, OSCQAccess } from "./osc_types";
-import { SerializedNode, SerializedRange } from "./serialized_node";
-import { OSCMethodArgument, OSCMethodDescription } from "./osc_method_description";
-import { ArgumentIndexError } from "./errors";
+import { OSCType, OSCQClipmode, OSCQRange, OSCQAccess } from "./osc_types.js";
+import { SerializedNode, SerializedRange } from "./serialized_node.js";
+import { OSCMethodArgument, OSCMethodDescription } from "./osc_method_description.js";
+import { ArgumentIndexError } from "./errors.js";
 
 function getTypeString(type: OSCType): string {
 	if (Array.isArray(type)) {

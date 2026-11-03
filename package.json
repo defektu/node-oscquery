@@ -4,7 +4,7 @@
   "description": "Full-featured OSCQuery implementation with complete protocol compliance",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.esm.json && node -e \"require('fs').writeFileSync('dist/esm/package.json','{\\\"type\\\":\\\"module\\\"}')\"",
+    "build": "tsc && tsc -p tsconfig.esm.json && node -e \"require('fs').writeFileSync('dist/esm/package.json','{\\\"type\\\":\\\"module\\\"}')\" && node --input-type=module -e \"await import('./dist/esm/core.js')\"",
     "prepare": "npm run build",
     "prepack": "npm run build",
     "dev": "npx ts-node-dev --respawn --transpile-only example/simple_example_server.ts",
