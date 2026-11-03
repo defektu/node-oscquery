@@ -1,0 +1,12 @@
+{
+	// ES module build of the runtime-agnostic core, for bundlers (the "module" export condition).
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"module": "es2020",
+		"moduleResolution": "node",
+		"outDir": "./dist/esm",
+		"declaration": false
+	},
+	"files": ["lib/core.ts"],
+	"include": []
+}

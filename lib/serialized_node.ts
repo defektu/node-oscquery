@@ -1,4 +1,4 @@
-import { OSCQClipmode } from "./osc_types"
+import { OSCQClipmode, OSCQExtendedType, OSCQUnit } from "./osc_types"
 
 type SerializedRangeSingle = {
 	MIN?: number,
@@ -12,15 +12,17 @@ export type SerializedNode = {
 	CONTENTS?: Record<string, SerializedNode>,
 	TYPE?: string,
 	ACCESS?: number,
-	RANGE?: (SerializedRange | null)[],
+	// RANGE, CLIPMODE, EXTENDED_TYPE, UNIT and VALUE are per-argument arrays, or a single value
+	// that applies to every argument (spec shorthand).
+	RANGE?: SerializedRange,
 	DESCRIPTION?: string,
 	TAGS?: string[],
 	CRITICAL?: boolean,
-	CLIPMODE?: (OSCQClipmode | null)[],
-	EXTENDED_TYPE?: (string | null)[],
-	UNIT?: (string | null)[],
+	CLIPMODE?: OSCQClipmode,
+	EXTENDED_TYPE?: OSCQExtendedType,
+	UNIT?: OSCQUnit,
 	OVERLOADS?: SerializedNode[],
-	VALUE?: (unknown | null)[],
+	VALUE?: unknown,
 }
 
 export type SerializedHostInfo = {

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `@defektu/oscquery/core` entry point: types, `OSCNode` and JSON (de)serialization
+  (`deserializeMethodNode`, `deserializeMethodDescription`, `deserializeHostInfo`, `deserializeRange`, `parseTypeString`) with no
+  Node.js dependencies, so browsers and bundlers can use it. Bundlers get an ES module build.
+
+### Fixed
+- Deserialization accepts the spec's single-value shorthand for `RANGE`, `CLIPMODE`,
+  `EXTENDED_TYPE`, `UNIT` and `VALUE` (applies to every argument). A shorthand `RANGE` used to
+  throw, and string attributes were indexed character by character.
+
 ## [2.0.0] - 2026-07-17
 
 ### Added
